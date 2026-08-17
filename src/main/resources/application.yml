@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: recommender-service
+
+  datasource:
+    url: jdbc:h2:mem:recommender;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+recommender:
+  providers:
+    service1:
+      base-url: https://a2da22tugdqsame4ckd3oohkmu0tnbne.lambda-url.eu-central-1.on.aws
+      path: /services/service1
+      token: service1-dev
+      timeout: 2s
+    service2:
+      base-url: https://a2da22tugdqsame4ckd3oohkmu0tnbne.lambda-url.eu-central-1.on.aws
+      path: /services/service2
+      timeout: 2s
+  aggregation:
+    overall-timeout: 3s
+
+logging:
+  level:
+    root: INFO
+    com.funwithactivity.recommender: DEBUG

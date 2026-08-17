@@ -1,0 +1,164 @@
+openapi: 3.0.3
+info:
+  title: Health & Activity Recommender API
+  description: >
+    Stage 0 skeleton API. Scope per system-design-v2.md §10 "Stage 0 - PoC / Skeleton":
+    a thin vertical slice of the Recommendations Aggregator (§7.5) - fetch a user's
+    profile, scatter-gather recommendations from Service1 + Service2 provider adapters,
+    and return a unified, normalized list with partial-result reporting when a provider fails.
+  version: "0.1.0-stage0"
+servers:
+  - url: /
+
+tags:
+  - name: users
+    description: Minimal user profile lookup (seeded via Liquibase, no auth in Stage 0)
+  - name: recommendations
+    description: Recommendations aggregator (§7.5 of system-design-v2.md)
+
+paths:
+  /users/{userId}/profile:
+    get:
+      operationId: getUserProfile
+      tags: [users]
+      summary: Get a user's profile
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User profile found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /recommendations/{userId}:
+    get:
+      operationId: getRecommendations
+      tags: [recommendations]
+      summary: Aggregate recommendations for a user from all configured providers
+      description: >
+        Loads the user's profile, calls Service1 and Service2 adapters in parallel
+        (scatter-gather), normalizes each provider's output to the unified model,
+        merges and ranks by normalizedScore. Returns partial results if a provider
+        fails or times out - see providerStatuses.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Aggregated recommendations (possibly partial)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationsResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+      example: "u-1001"
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+  schemas:
+    ProblemDetail:
+      type: object
+      description: RFC 7807 problem detail
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+
+    UserProfile:
+      type: object
+      required: [userId, heightCm, weightKg, birthDate]
+      properties:
+        userId:
+          type: string
+        heightCm:
+          type: number
+          format: double
+        weightKg:
+          type: number
+          format: double
+        birthDate:
+          type: string
+          format: date
+        gender:
+          type: string
+        activityLevel:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProviderStatus:
+      type: object
+      required: [provider, status]
+      properties:
+        provider:
+          type: string
+          example: service1
+        status:
+          type: string
+          enum: [OK, FAILED, TIMEOUT]
+        errorMessage:
+          type: string
+        latencyMs:
+          type: integer
+          format: int64
+
+    Recommendation:
+      type: object
+      required: [sourceProvider, title, normalizedScore]
+      properties:
+        sourceProvider:
+          type: string
+        title:
+          type: string
+        details:
+          type: string
+        normalizedScore:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+
+    RecommendationsResponse:
+      type: object
+      required: [userId, generatedAt, recommendations, providerStatuses]
+      properties:
+        userId:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Recommendation'
+        providerStatuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderStatus'

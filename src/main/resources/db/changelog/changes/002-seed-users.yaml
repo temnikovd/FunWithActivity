@@ -1,0 +1,60 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-seed-demo-users
+      author: recommender-service
+      comment: >
+        Stage 0 demo data. Prod would never seed real user data via changelog -
+        this exists purely to make the PoC demoable without a UI-driven signup flow.
+      changes:
+        - insert:
+            tableName: app_user
+            columns:
+              - column: { name: id, value: "u-1001" }
+              - column: { name: email, value: "alice.demo@funwithactivity.example" }
+              - column: { name: status, value: "ACTIVE" }
+              - column: { name: created_at, valueDate: "2026-01-10T09:00:00" }
+        - insert:
+            tableName: app_user
+            columns:
+              - column: { name: id, value: "u-1002" }
+              - column: { name: email, value: "bob.demo@funwithactivity.example" }
+              - column: { name: status, value: "ACTIVE" }
+              - column: { name: created_at, valueDate: "2026-02-02T09:00:00" }
+        - insert:
+            tableName: app_user
+            columns:
+              - column: { name: id, value: "u-1003" }
+              - column: { name: email, value: "carol.demo@funwithactivity.example" }
+              - column: { name: status, value: "ACTIVE" }
+              - column: { name: created_at, valueDate: "2026-03-15T09:00:00" }
+
+        - insert:
+            tableName: user_profile
+            columns:
+              - column: { name: user_id, value: "u-1001" }
+              - column: { name: height_cm, valueNumeric: 184.0 }
+              - column: { name: weight_kg, valueNumeric: 84.0 }
+              - column: { name: birth_date, valueDate: "1990-04-12" }
+              - column: { name: gender, value: "female" }
+              - column: { name: activity_level, value: "MODERATE" }
+              - column: { name: updated_at, valueDate: "2026-01-10T09:00:00" }
+        - insert:
+            tableName: user_profile
+            columns:
+              - column: { name: user_id, value: "u-1002" }
+              - column: { name: height_cm, valueNumeric: 178.5 }
+              - column: { name: weight_kg, valueNumeric: 92.3 }
+              - column: { name: birth_date, valueDate: "1985-11-02" }
+              - column: { name: gender, value: "male" }
+              - column: { name: activity_level, value: "LOW" }
+              - column: { name: updated_at, valueDate: "2026-02-02T09:00:00" }
+        - insert:
+            tableName: user_profile
+            columns:
+              - column: { name: user_id, value: "u-1003" }
+              - column: { name: height_cm, valueNumeric: 165.0 }
+              - column: { name: weight_kg, valueNumeric: 58.0 }
+              - column: { name: birth_date, valueDate: "1998-07-23" }
+              - column: { name: gender, value: "female" }
+              - column: { name: activity_level, value: "HIGH" }
+              - column: { name: updated_at, valueDate: "2026-03-15T09:00:00" }

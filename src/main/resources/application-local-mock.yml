@@ -1,0 +1,6 @@
+recommender:
+  providers:
+    service1:
+      base-url: http://localhost:8080
+    service2:
+      base-url: http://localhost:8080

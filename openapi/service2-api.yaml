@@ -1,0 +1,80 @@
+openapi: 3.0.3
+info:
+  title: Service2 provider contract (models only)
+  description: >
+    Model-only spec for codegen. Mirrors the deployed mock at
+    https://a2da22tugdqsame4ckd3oohkmu0tnbne.lambda-url.eu-central-1.on.aws/services/service2
+    (fetched openapi.json, cross-checked against the pre-sale case PDF).
+    Same Lambda Function URL envelope quirk as Service1 - see Service2LambdaEnvelope.
+    Note: the PDF documents a wrapped success shape {"recommendations": [...]},
+    but the live deployed mock returns a bare JSON array directly inside "body".
+    Service2Client tolerates both shapes defensively.
+  version: "1.0.0"
+paths: {}
+components:
+  schemas:
+    Service2Measurements:
+      type: object
+      description: mass in pounds, height in feet
+      required: [mass, height]
+      properties:
+        mass:
+          type: number
+          format: double
+        height:
+          type: number
+          format: double
+
+    Service2Request:
+      type: object
+      description: birth_date is a unix timestamp (UTC); session_token must be a unique UUID per request
+      required: [measurements, birth_date, session_token]
+      properties:
+        measurements:
+          $ref: '#/components/schemas/Service2Measurements'
+        birth_date:
+          type: integer
+          format: int64
+        session_token:
+          type: string
+
+    Service2LambdaEnvelope:
+      type: object
+      required: [statusCode, body]
+      properties:
+        statusCode:
+          type: integer
+        body:
+          type: string
+          description: "JSON-encoded payload - either a bare array (observed) or a {recommendations: [...]} wrapper (documented)"
+
+    Service2RecommendationItem:
+      type: object
+      required: [priority, title, details]
+      properties:
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        title:
+          type: string
+        details:
+          type: string
+
+    Service2SuccessResponse:
+      type: object
+      description: Documented (wrapped) success shape from the PDF; tolerated in addition to the observed bare array.
+      properties:
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Service2RecommendationItem'
+
+    Service2ErrorResponse:
+      type: object
+      description: Documented business-error shape (PDF); the deployed mock returns FastAPI 422 validation errors instead.
+      properties:
+        code:
+          type: integer
+        error:
+          type: string

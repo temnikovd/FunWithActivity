@@ -1,0 +1,60 @@
+openapi: 3.0.3
+info:
+  title: Service1 provider contract (models only)
+  description: >
+    Model-only spec for codegen. Mirrors the deployed mock at
+    https://a2da22tugdqsame4ckd3oohkmu0tnbne.lambda-url.eu-central-1.on.aws/services/service1
+    (fetched openapi.json, cross-checked against the pre-sale case PDF).
+    The live endpoint is deployed as a Lambda Function URL without a proxy-integration
+    response mapping: the HTTP body is a JSON envelope whose "body" field is itself a
+    JSON-encoded string containing the documented payload. Service1Client is
+    responsible for unwrapping it.
+  version: "1.0.0"
+paths: {}
+components:
+  schemas:
+    Service1Request:
+      type: object
+      description: height in cm, weight in kg, token - use service1-dev
+      required: [height, weight, token]
+      properties:
+        height:
+          type: number
+          format: double
+        weight:
+          type: number
+          format: double
+        token:
+          type: string
+
+    Service1LambdaEnvelope:
+      type: object
+      description: Raw Lambda Function URL response envelope actually returned by the deployed mock.
+      required: [statusCode, body]
+      properties:
+        statusCode:
+          type: integer
+        body:
+          type: string
+          description: JSON-encoded array of Service1RecommendationItem
+
+    Service1RecommendationItem:
+      type: object
+      required: [confidence, recommendation]
+      properties:
+        confidence:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        recommendation:
+          type: string
+
+    Service1ErrorResponse:
+      type: object
+      description: Documented business-error shape (PDF); the deployed mock returns FastAPI 422 validation errors instead.
+      properties:
+        errorCode:
+          type: integer
+        errorMessage:
+          type: string
