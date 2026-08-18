@@ -1,30 +1,24 @@
 # recommender-service — Stage 0 skeleton
 
-Java 21 / Spring Boot 3.3 implementation of the **Stage 0 — PoC / Skeleton**
-scope defined in [`../system-design-v2.md`](../system-design-v2.md) §10: a
-real, minimal slice of the target-state Recommendations Aggregator (§7.5) —
-scatter-gather across the Service1 + Service2 provider adapters described in
-the pre-sale case, normalized to a unified model, with partial results if a
-provider fails.
+A Java 21 / Spring Boot 3.3 service that gets activity recommendations from
+two external providers, combines them into one list, and returns partial
+results if a provider fails.
 
-## What's in scope (and what isn't)
+## Scope
 
-Per the system design, Stage 0 is deliberately narrow:
+**Included:**
+- `GET /recommendations/{userId}` — calls Service1 and Service2 in parallel,
+  merges and ranks the results.
+- `GET /users/{userId}/profile` — reads a stored user profile (height,
+  weight, birth date) used to build the provider requests.
 
-- **In scope:** `GET /recommendations/{userId}` (the aggregator, the actual
-  customer concern) and `GET /users/{userId}/profile` (just enough
-  persistence to drive it without re-typing height/weight/birth date on
-  every call).
-- **Out of scope** (explicitly deferred to Stage 1+ per system-design-v2.md
-  §10): auth, consent, device ingestion, social/loyalty, analytics,
-  retry/circuit-breaker resilience beyond timeout + partial results.
-- **Deliberately added beyond the literal Stage 0 spec:** H2 + Liquibase
-  persistence for `User`/`UserProfile` (Stage 0 originally called for
-  UI-entered, non-persisted input). This was a scope decision made with the
-  customer stakeholder for this session — see conversation record — to make
-  the skeleton demoable without manual re-entry, while keeping recommendation
-  results themselves ephemeral (not persisted), consistent with the
-  "thin vertical slice" intent.
+**Not included:** auth, consent, device data, social features, loyalty,
+analytics, caching.
+
+**Added beyond the minimum:** H2 + Liquibase storage for `User` and
+`UserProfile`, with 3 demo users seeded on startup. This avoids re-entering
+profile data on every request. Recommendation results themselves are not
+stored.
 
 ## Architecture
 
@@ -32,105 +26,120 @@ Per the system design, Stage 0 is deliberately narrow:
 Client
   │
   ▼
-RecommendationsController / UsersController      (generated API interfaces,
-  │                                                openapi/recommender-api.yaml)
+RecommendationsController / UsersController   (generated from openapi/recommender-api.yaml)
+  │
   ▼
-RecommendationAggregatorService                  scatter-gather, merge & rank
+RecommendationAggregatorService                scatter-gather, merge, rank
   │            │
   ▼            ▼
-Service1Adapter   Service2Adapter                 ProviderAdapter interface —
-  │                 │                              add Service3 = new adapter,
-  ▼                 ▼                               zero changes here
-Service1Client    Service2Client                  unit conversion, Lambda
-  │                 │                              envelope unwrap
+Service1Adapter   Service2Adapter              ProviderAdapter interface
+  │                 │                          (add Service3 = new adapter,
+  ▼                 ▼                           no other code changes)
+Service1Client    Service2Client                unit conversion, response unwrap
+  │                 │
   ▼                 ▼
-  Service1/Service2 mock endpoints (real HTTP, see openapi/service*-api.yaml)
+  Service1 / Service2 mock endpoints (real HTTP calls)
 ```
 
-- **`domain/provider`** — one `ProviderAdapter` per external provider. Adding
-  Service3 means adding a new `@Component` implementing the interface;
-  `RecommendationAggregatorService` picks it up automatically (Spring injects
-  `List<ProviderAdapter>`) — the extensibility demo called for in the
-  pre-sale case and system-design-v2.md §9.
-- **`domain/aggregation`** — scatter-gather via a virtual-thread executor,
-  per-call timeout (`recommender.aggregation.overall-timeout`), and partial
-  results: a failed or timed-out provider is reported in `providerStatuses`
-  without failing the whole request.
-- **`domain/user`** — H2/Liquibase-backed profile lookup.
-- **`config`** — externalized provider base URLs/timeouts
-  (`ProviderProperties`), one `RestClient` per provider.
-- **`web`** — RFC 7807 `ProblemDetail` error responses, a correlation-id
-  filter (`X-Correlation-Id`) so every log line for a request can be tied
-  together.
+- **`domain/provider`** — one `ProviderAdapter` per provider. Spring collects
+  all `ProviderAdapter` beans automatically, so adding a new provider needs
+  only a new adapter class.
+- **`domain/aggregation`** — calls all providers in parallel (virtual
+  threads), each wrapped in a per-provider retry + circuit breaker
+  (resilience4j, `resilience4j.*` in `application.yml`) plus an overall
+  timeout. A failed, retried-out, circuit-open, or slow provider does not
+  stop the request — it shows up in `providerStatuses` instead.
+- **`domain/user`** — profile lookup backed by H2/Liquibase.
+- **`config`** — provider URLs and timeouts (`ProviderProperties`), one
+  `RestClient` per provider.
+- **`web`** — error responses as RFC 7807 `ProblemDetail`, and a
+  correlation-ID filter so all log lines from one request share an ID.
 
-## OpenAPI-driven codegen
+## OpenAPI code generation
 
-Three specs under `openapi/`, all wired through
-`openapi-generator-maven-plugin` in `pom.xml` (runs on `generate-sources`,
-no manual step needed):
+Three specs in `openapi/`, generated by `openapi-generator-maven-plugin`
+(runs automatically during the build):
 
 | Spec | Generates | Used for |
 |---|---|---|
-| `recommender-api.yaml` | server interfaces + models (`generated.api`, `generated.model`) | our own exposed API — controllers `implements` the generated interfaces |
-| `service1-api.yaml` | models only (`generated.service1.model`) | `Service1Client` request/response types |
-| `service2-api.yaml` | models only (`generated.service2.model`) | `Service2Client` request/response types |
+| `recommender-api.yaml` | server interfaces + models | our own API — controllers implement the generated interfaces |
+| `service1-api.yaml` | models only | request/response types for `Service1Client` |
+| `service2-api.yaml` | models only | request/response types for `Service2Client` |
 
-The provider specs were **not** trusted blindly from the pre-sale case PDF or
-even the deployed mock's own `/openapi.json` — both were fetched and
-independently verified against the mock's live HTTP behavior (see below),
-because the two disagreed with each other.
+Both provider specs were checked against the real mock endpoint with
+`curl`, not just written from documentation.
 
-## A quirk that only showed up by calling the real mock
+## A real quirk found by testing the mock endpoint
 
-The mock endpoint at
-`https://a2da22tugdqsame4ckd3oohkmu0tnbne.lambda-url.eu-central-1.on.aws`
-is a Lambda Function URL deployed **without** a proxy-integration response
-mapping. Its HTTP response body is not the documented payload — it's an
-envelope:
+The external mock endpoint we tested against wraps every response in an
+envelope instead of returning the payload directly:
 
 ```json
 {"statusCode": 200, "body": "[{\"confidence\": 0.6, \"recommendation\": \"Walk more\"}]"}
 ```
 
-`body` is itself a JSON-encoded string that has to be parsed a second time.
-`Service1Client`/`Service2Client` handle this explicitly
-(`Service1LambdaEnvelope`/`Service2LambdaEnvelope` in the generated models).
+`body` is a JSON string, not a JSON object — it must be parsed a second
+time. `Service1Client` and `Service2Client` handle this.
 
-Separately, the PDF documents Service2's success shape as
-`{"recommendations": [...]}`, but the live mock actually returns a **bare
-array** inside `body`. `Service2Client.parseBody` tolerates both shapes
-defensively rather than picking one and breaking on the other.
+Also, the written spec for Service2 says a success response looks like
+`{"recommendations": [...]}`, but that endpoint returned a plain array
+instead. `Service2Client.parseBody` accepts both forms.
 
-Neither discrepancy is guesswork — both were confirmed with `curl` against
-the live endpoint before being encoded into the OpenAPI specs and client
-code.
+That external endpoint turned out to be unreliable for demos, so the app can
+now also run against a local mock (see below), which reproduces the same
+envelope format so no client code had to change.
 
-## Compliance-driven choices (system-design-v2.md §2, §3, §8)
+## Local mock provider
 
-- **No health/PII payloads in logs.** `GlobalExceptionHandler` and every
-  logging statement log identifiers (`userId`, provider name, status,
-  latency) — never height/weight/birth date or recommendation content. This
-  mirrors the target-state rule "no health data enters telemetry" and the
-  audit-log design ("metadata only") even though Stage 0 has no real audit
-  log yet.
-- **Correlation ID, not request/response body dumping**, for traceability —
-  same reasoning: a debug-friendly skeleton that never has to be re-audited
-  for accidental PII logging later.
+`application.yml` still points `recommender.providers.service1/2.base-url`
+at the original external mock. `application-local-mock.yml` overrides both
+to `http://localhost:8080`, and `MockProviderController` (`mock` package,
+active only under the `local-mock` Spring profile) serves
+`/services/service1` and `/services/service2` in the same process,
+returning fixed sample data in the same envelope format described above.
+
+Run with the local mock:
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=local-mock
+```
+
+This lets the app run and be demoed with no network access and no
+dependency on an external service being up.
+
+## Logging
+
+Logs never include health data or profile values — only IDs, provider
+names, status, and timing. Every request gets a correlation ID
+(`X-Correlation-Id` header), so its log lines can be found and grouped
+together.
 
 ## Running it
 
 ```bash
 cd recommender-service
-mvn spring-boot:run
+mvn spring-boot:run                                          # calls the external provider endpoint
+mvn spring-boot:run -Dspring-boot.run.profiles=local-mock    # calls the local mock instead (offline)
 ```
 
-- API: `http://localhost:8080` — e.g. `GET /recommendations/u-1001`,
-  `GET /users/u-1001/profile` (seeded users: `u-1001`, `u-1002`, `u-1003`,
-  see `src/main/resources/db/changelog/changes/002-seed-users.yaml`)
+### Docker
+
+```bash
+./rebuild-and-run.sh              # builds the image, (re)starts the container, waits for /actuator/health
+./rebuild-and-run.sh local-mock   # same, with SPRING_PROFILES_ACTIVE=local-mock
+```
+
+The `Dockerfile` is a multi-stage build (Maven build stage, JRE-only runtime
+stage, non-root user) - `docker build` is the only prerequisite, no local
+Java/Maven needed. Re-run the script after any code change to rebuild and
+redeploy the container.
+
+- API: `http://localhost:8080` — try `GET /recommendations/u-1001` or
+  `GET /users/u-1001/profile` (seeded users: `u-1001`, `u-1002`, `u-1003`)
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
-- H2 console: `http://localhost:8080/h2-console` (JDBC URL
-  `jdbc:h2:mem:recommender`, user `sa`, empty password)
-- Health: `http://localhost:8080/actuator/health`
+- H2 console: `http://localhost:8080/h2-console`
+  (JDBC URL `jdbc:h2:mem:recommender`, user `sa`, empty password)
+- Health check: `http://localhost:8080/actuator/health`
 
 ## Testing
 
@@ -138,24 +147,15 @@ mvn spring-boot:run
 mvn test
 ```
 
-25 tests covering: provider clients (envelope unwrapping, unit conversion,
-both Service2 response shapes, network/parse failure handling), adapters
-(mapping to the unified model), the aggregator (merge/rank, partial results
-on failure, timeout handling, propagating unknown-user errors), the
-Liquibase-seeded persistence layer, controller contracts (`MockMvc`), the
-global exception handler, the correlation-id filter, and a full
-`@SpringBootTest` context-load smoke test.
+28 tests cover: provider clients (response parsing, unit conversion, error
+handling), adapters, the aggregator (merging, partial results, timeouts,
+unknown-user errors, true concurrency, retry-then-success, circuit-breaker
+open), the seeded database, controllers, the error handler, the
+correlation-ID filter, and app startup.
 
-## Known simplifications vs. target state
+## What is simplified for now
 
-These are intentional Stage 0 scope cuts, not oversights — each maps to a
-later delivery stage in system-design-v2.md §10:
-
-- No retry or circuit breaker per provider — only a timeout. Target state
-  (§9) adds circuit breaking; Stage 0 only needs to prove partial results
-  work.
-- No caching (ElastiCache in target state) — every call hits the providers.
-- No pseudonymization at the provider boundary — target state pseudonymizes
-  before any external call; Stage 0 sends raw height/weight/birth date since
-  there's no real user PII involved yet (seeded demo data only).
-- Recommendation results are not persisted — only `User`/`UserProfile` are.
+- No caching — every request calls both providers again.
+- No pseudonymization before calling providers — profile data (demo data
+  only) is sent as-is.
+- Only `User` and `UserProfile` are stored; recommendation results are not.

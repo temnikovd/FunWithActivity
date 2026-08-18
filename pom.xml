@@ -55,6 +55,13 @@
             <version>2.6.0</version>
         </dependency>
 
+        <!-- Per-provider retry + circuit breaker around the scatter-gather calls -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+            <version>2.2.0</version>
+        </dependency>
+
         <!-- Required at runtime by openapi-generator "spring" generated models (nullable wrapper) -->
         <dependency>
             <groupId>org.openapitools</groupId>
