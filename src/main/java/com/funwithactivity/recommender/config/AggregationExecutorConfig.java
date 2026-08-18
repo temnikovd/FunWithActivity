@@ -8,10 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class AggregationExecutorConfig {
 
-    /**
-     * Scatter-gather calls out to a handful of I/O-bound providers per request -
-     * a virtual-thread-per-task executor avoids sizing a fixed pool for that.
-     */
+    /** Executor for parallel I/O-bound provider calls; avoids sizing a fixed pool. */
     @Bean(destroyMethod = "shutdown")
     public ExecutorService providerCallExecutor() {
         return Executors.newVirtualThreadPerTaskExecutor();

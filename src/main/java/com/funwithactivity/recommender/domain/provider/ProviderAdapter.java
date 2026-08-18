@@ -5,11 +5,9 @@ import com.funwithactivity.recommender.generated.model.UserProfile;
 import java.util.List;
 
 /**
- * A single external activities/health-tips provider integration.
- * Adding a new provider = a new implementation of this interface, wired up
- * in {@link com.funwithactivity.recommender.domain.aggregation.RecommendationAggregatorService}
- * - zero changes to the aggregation/scatter-gather logic
- * (system-design-v2.md §7.5, §9 "New provider / new device").
+ * A single external activities/health-tips provider integration. A new
+ * provider is added by implementing this interface; the aggregator picks
+ * it up automatically.
  */
 public interface ProviderAdapter {
 

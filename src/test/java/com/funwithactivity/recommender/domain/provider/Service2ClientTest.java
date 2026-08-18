@@ -42,7 +42,7 @@ class Service2ClientTest {
 
     @Test
     void convertsUnitsAndUsesUniqueSessionTokenPerRequest() {
-        // 184 cm == 6.036... ft, 84 kg == 185.2... lb
+        // cm/kg converted to ft/lb
         mockServer.expect(requestTo("https://provider.test/services/service2"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(jsonPath("$.measurements.height", Matchers.closeTo(6.036745, 0.000001)))
@@ -92,6 +92,32 @@ class Service2ClientTest {
         mockServer.expect(requestTo("https://provider.test/services/service2"))
                 .andRespond(withSuccess("""
                         {"statusCode":200,"body":"not-json"}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.fetchRecommendations(184.0, 84.0, LocalDate.of(2021, 3, 16)))
+                .isInstanceOf(ProviderException.class);
+    }
+
+    @Test
+    void wrapsNonSuccessEnvelopeStatusCodeAsProviderExceptionInsteadOfNpe() {
+        // Non-2xx envelope status must surface as ProviderException, not reach the array parser.
+        mockServer.expect(requestTo("https://provider.test/services/service2"))
+                .andRespond(withSuccess("""
+                        {"statusCode":501,"body":"{\\"errorCode\\": 97, \\"errorMessage\\": \\"function not working properly yet\\", \\"statusCode\\": 503}"}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.fetchRecommendations(184.0, 84.0, LocalDate.of(2021, 3, 16)))
+                .isInstanceOf(ProviderException.class)
+                .hasMessageContaining("statusCode=501")
+                .hasMessageContaining("function not working properly yet");
+    }
+
+    @Test
+    void wrapsSuccessBodyMissingRecommendationsArrayAsProviderExceptionInsteadOfNpe() {
+        // Object body without a recommendations array must fail loudly, not return null items.
+        mockServer.expect(requestTo("https://provider.test/services/service2"))
+                .andRespond(withSuccess("""
+                        {"statusCode":200,"body":"{\\"somethingElse\\": true}"}
                         """, MediaType.APPLICATION_JSON));
 
         assertThatThrownBy(() -> client.fetchRecommendations(184.0, 84.0, LocalDate.of(2021, 3, 16)))

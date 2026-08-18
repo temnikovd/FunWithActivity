@@ -11,10 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 
-/**
- * Exercises the real Liquibase-managed H2 schema and seed data
- * (db/changelog/changes/001-init-schema.yaml, 002-seed-users.yaml).
- */
+/** Exercises the real Liquibase-managed H2 schema and seed data. */
 @DataJpaTest
 @Import(UserProfileService.class)
 class UserProfileServiceTest {

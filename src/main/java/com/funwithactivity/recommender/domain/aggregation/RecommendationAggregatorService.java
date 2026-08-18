@@ -24,19 +24,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Stage 0 vertical slice of the target-state Recommendations Aggregator
- * (system-design-v2.md §7.5): scatter-gather across every configured
- * {@link ProviderAdapter} in parallel, tolerate individual provider failures
- * or timeouts, merge and rank the successful results.
- *
- * Each provider call is wrapped in a per-provider {@link Retry} +
- * {@link CircuitBreaker} (resilience4j, configured in application.yml under
- * {@code resilience4j.retry}/{@code resilience4j.circuitbreaker}, keyed by
- * {@link ProviderAdapter#providerName()}), on top of the overall timeout.
- *
- * Adding Service3 requires only a new {@link ProviderAdapter} bean - Spring
- * injects every implementation into {@code providerAdapters} automatically,
- * so this class never changes.
+ * Scatter-gathers across every configured {@link ProviderAdapter} in parallel,
+ * tolerating individual failures or timeouts, then merges and ranks the results.
+ * Each call is wrapped in a per-provider {@link Retry} + {@link CircuitBreaker}
+ * on top of the overall timeout.
  */
 @Service
 public class RecommendationAggregatorService {
@@ -70,9 +61,7 @@ public class RecommendationAggregatorService {
 
         log.info("Aggregating recommendations for userId={} across {} provider(s)", userId, providerAdapters.size());
 
-        // Start every provider call before joining any of them - joining inside
-        // the same map() would serialize the calls (each join() blocks before the
-        // next adapter's call is even started).
+        // Start every call before joining any of them, so they run concurrently.
         List<CompletableFuture<ProviderOutcome>> pending =
                 providerAdapters.stream().map(adapter -> callWithTimeout(adapter, profile)).toList();
         List<ProviderOutcome> outcomes = pending.stream().map(CompletableFuture::join).toList();
@@ -108,21 +97,15 @@ public class RecommendationAggregatorService {
     }
 
     /**
-     * Wraps the raw (throwing) provider call with a per-provider retry and
-     * circuit breaker, then converts the outcome - success or the final
-     * exception, after retries are exhausted or the circuit is open - into a
-     * {@link ProviderOutcome}. Retry must wrap the call that actually throws
-     * {@link com.funwithactivity.recommender.domain.provider.ProviderException};
-     * wrapping an already-caught result would never retry anything.
+     * Wraps the raw provider call with a per-provider retry and circuit breaker,
+     * converting the outcome (success or final exception) into a {@link ProviderOutcome}.
      */
     private Supplier<ProviderOutcome> decorate(ProviderAdapter adapter, UserProfile profile, long start) {
         CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker(adapter.providerName());
         Retry retry = retryRegistry.retry(adapter.providerName());
 
-        // Retry wraps the circuit-breaker-guarded call: each attempt (including
-        // retries) is individually recorded by the breaker, but once the circuit
-        // is open, CallNotPermittedException short-circuits immediately and is
-        // not itself retried (only ProviderException is, per application.yml).
+        // Retry wraps the circuit-breaker-guarded call, so each attempt is recorded
+        // by the breaker; once open, calls short-circuit without being retried.
         Supplier<List<UnifiedRecommendation>> rawCall = () -> adapter.fetchRecommendations(profile);
         Supplier<List<UnifiedRecommendation>> withCircuitBreaker = CircuitBreaker.decorateSupplier(circuitBreaker, rawCall);
         Supplier<List<UnifiedRecommendation>> resilientCall = Retry.decorateSupplier(retry, withCircuitBreaker);

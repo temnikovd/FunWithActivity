@@ -81,4 +81,20 @@ class Service1ClientTest {
         assertThatThrownBy(() -> client.fetchRecommendations(184.0, 84.0))
                 .isInstanceOf(ProviderException.class);
     }
+
+    @Test
+    void wrapsNonSuccessEnvelopeStatusCodeAsProviderExceptionInsteadOfNpe() {
+        // Non-2xx envelope status must surface as ProviderException, not reach the array parser.
+        String envelope = """
+                {"statusCode":501,"body":"{\\"errorCode\\": 97, \\"errorMessage\\": \\"function not working properly yet\\", \\"statusCode\\": 503}"}
+                """;
+
+        mockServer.expect(requestTo("https://provider.test/services/service1"))
+                .andRespond(withSuccess(envelope, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.fetchRecommendations(184.0, 84.0))
+                .isInstanceOf(ProviderException.class)
+                .hasMessageContaining("statusCode=501")
+                .hasMessageContaining("function not working properly yet");
+    }
 }

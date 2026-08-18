@@ -10,10 +10,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Translates domain exceptions into RFC 7807 problem details. Never logs
- * request/response bodies - only identifiers and error metadata - since
- * those bodies may carry health data (system-design-v2.md §8 "No health
- * data enters telemetry").
+ * Translates domain exceptions into RFC 7807 problem details. Logs only
+ * identifiers and error metadata, never request/response bodies.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {

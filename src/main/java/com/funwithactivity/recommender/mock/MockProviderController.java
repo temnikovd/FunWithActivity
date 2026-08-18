@@ -15,12 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Local stand-in for the deployed provider Lambdas, active only under the
- * "local-mock" profile (see application-local-mock.yml). Reproduces the same
- * Lambda Function URL envelope ({@code statusCode}/{@code body}) as the real
- * mocks so Service1Client/Service2Client need no changes to talk to it.
- *
- * To add Service3: add a POST mapping here, plus a "service3" entry under
- * recommender.providers in both application.yml and application-local-mock.yml.
+ * "local-mock" profile. Mirrors the same envelope shape as the real providers.
  */
 @RestController
 @Profile("local-mock")

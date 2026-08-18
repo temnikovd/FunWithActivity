@@ -6,11 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
-/**
- * One {@link RestClient} per provider, each with its own base URL and timeout
- * (system-design-v2.md §9 "External provider resilience" - providers offer no
- * availability guarantees, so calls must never share an unbounded client).
- */
+/** One {@link RestClient} per provider, each with its own base URL and timeout. */
 @Configuration
 public class ProviderRestClientConfig {
 

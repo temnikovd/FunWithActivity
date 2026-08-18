@@ -4,7 +4,7 @@ import com.funwithactivity.recommender.domain.model.UnifiedRecommendation;
 import com.funwithactivity.recommender.generated.model.ProviderStatus;
 import java.util.List;
 
-/** Result of calling a single provider, successful or not - the basis for partial-result reporting. */
+/** Result of calling a single provider, successful or not. */
 record ProviderOutcome(
         String provider,
         ProviderStatus.StatusEnum status,

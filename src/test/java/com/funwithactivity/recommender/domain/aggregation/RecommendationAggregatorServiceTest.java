@@ -49,8 +49,7 @@ class RecommendationAggregatorServiceTest {
         properties = new ProviderProperties();
         properties.getAggregation().setOverallTimeout(Duration.ofMillis(500));
 
-        // Short, deterministic retry so tests stay fast; only ProviderException
-        // is retried, same as the production application.yml config.
+        // Fast, deterministic retry; only ProviderException is retried.
         retryRegistry = RetryRegistry.of(RetryConfig.custom()
                 .maxAttempts(3)
                 .waitDuration(Duration.ofMillis(5))
@@ -158,8 +157,7 @@ class RecommendationAggregatorServiceTest {
 
     @Test
     void callsAllProvidersConcurrentlyRatherThanOneAfterAnother() {
-        // Regression guard for the sequential-stream bug: two adapters that each
-        // sleep ~300ms must overlap, not add up. Generous margin to avoid CI flakiness.
+        // Two adapters sleeping ~300ms each must run concurrently, not sequentially.
         ProviderAdapter slow1 = sleepingAdapter("service1", 300);
         ProviderAdapter slow2 = sleepingAdapter("service2", 300);
 
@@ -205,7 +203,7 @@ class RecommendationAggregatorServiceTest {
         ProviderAdapter alwaysFails = failingAdapter("service1", new ProviderException("boom"));
         RecommendationAggregatorService aggregator = newAggregator(List.of(alwaysFails));
 
-        // minimumNumberOfCalls=2 in the test registry: two failing calls trip the breaker.
+        // Two failing calls trip the breaker (minimumNumberOfCalls=2).
         aggregator.getRecommendations("u-1001");
         aggregator.getRecommendations("u-1001");
         RecommendationsResponse response = aggregator.getRecommendations("u-1001");
